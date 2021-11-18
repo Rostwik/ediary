@@ -19,7 +19,7 @@ def fix_marks(name):
 
 
 def remove_chastisements(name):
-    kid = Schoolkid.objects.filter(full_name__contains=name).first()
+    kid = get_kid(name)
     chasts = Chastisement.objects.filter(schoolkid=kid)
     chasts.delete()
 
