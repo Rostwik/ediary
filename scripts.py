@@ -5,8 +5,13 @@ from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from datacenter.models import Schoolkid, Commendation, Chastisement, Mark, Lesson, Subject
 
 
-def fix_marks(name):
+def get_kid(name):
     kid = Schoolkid.objects.filter(full_name__contains=name).first()
+    return kid
+
+
+def fix_marks(name):
+    kid = get_kid(name)
     marks = Mark.objects.filter(schoolkid=kid, points__in=['2', '3'])
     for mark in marks:
         mark.points = '5'
@@ -20,7 +25,7 @@ def remove_chastisements(name):
 
 
 def create_commendation(name, subject):
-    list_commendations = [
+    commendations = [
         'Молодец!',
         'Отлично!',
         'Хорошо!',
@@ -59,24 +64,27 @@ def create_commendation(name, subject):
 
     try:
         kid = Schoolkid.objects.get(full_name__contains=name)
-    except MultipleObjectsReturned:
+    except Schoolkid.MultipleObjectsReturned:
         print('Найдено несколько похожих учеников, уточните искомое знаение.')
-    except ObjectDoesNotExist:
+    except Schoolkid.DoesNotExist:
         print('Такого ученика нет.')
     else:
         try:
             Subject.objects.get(title=subject, year_of_study=kid.year_of_study)
-        except ObjectDoesNotExist:
+        except Subject.DoesNotExist:
             print('Такого предмета не существует.')
         else:
-            lesson = Lesson.objects.filter(
-                year_of_study=kid.year_of_study,
-                group_letter=kid.group_letter,
-                subject__title=subject).order_by('-date').first()
-            is_commendation = Commendation.objects.filter(subject=lesson.subject, created=lesson.date)
-
-            if not is_commendation:
-                Commendation.objects.create(text=random.choice(list_commendations), created=lesson.date, schoolkid=kid,
-                                            subject=lesson.subject, teacher=lesson.teacher)
+            try:
+                lesson = Lesson.objects.filter(
+                    year_of_study=kid.year_of_study,
+                    group_letter=kid.group_letter,
+                    subject__title=subject).order_by('-date').first()
+            except Lesson.DoesNotExist:
+                print('Урока с таким предметом не существует.')
             else:
-                print('На последнем уроке по этому предмету у тебя уже есть похвала, попробуй другой предмет')
+                is_commendation = Commendation.objects.filter(subject=lesson.subject, created=lesson.date)
+                if not is_commendation:
+                    Commendation.objects.create(text=random.choice(commendations), created=lesson.date, schoolkid=kid,
+                                                subject=lesson.subject, teacher=lesson.teacher)
+                else:
+                    print('На последнем уроке по этому предмету у тебя уже есть похвала, попробуй другой предмет')
