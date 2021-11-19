@@ -1,27 +1,33 @@
 import random
 
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
-
 from datacenter.models import Schoolkid, Commendation, Chastisement, Mark, Lesson, Subject
 
 
 def get_kid(name):
-    kid = Schoolkid.objects.filter(full_name__contains=name).first()
-    return kid
+    try:
+        kid = Schoolkid.objects.get(full_name__contains=name)
+    except Schoolkid.MultipleObjectsReturned:
+        print('Найдено несколько похожих учеников, уточните искомое знаение.')
+    except Schoolkid.DoesNotExist:
+        print('Такого ученика нет.')
+    else:
+        return kid
 
 
 def fix_marks(name):
     kid = get_kid(name)
     marks = Mark.objects.filter(schoolkid=kid, points__in=['2', '3'])
-    for mark in marks:
-        mark.points = '5'
-        mark.save()
+    if marks:
+        for mark in marks:
+            mark.points = '5'
+            mark.save()
 
 
 def remove_chastisements(name):
     kid = get_kid(name)
     chasts = Chastisement.objects.filter(schoolkid=kid)
-    chasts.delete()
+    if chasts:
+        chasts.delete()
 
 
 def create_commendation(name, subject):
@@ -62,29 +68,28 @@ def create_commendation(name, subject):
         print('Заполни, пожалуйста, все поля внимательно.')
         return
 
+    kid = get_kid(name)
+
     try:
-        kid = Schoolkid.objects.get(full_name__contains=name)
-    except Schoolkid.MultipleObjectsReturned:
-        print('Найдено несколько похожих учеников, уточните искомое знаение.')
-    except Schoolkid.DoesNotExist:
-        print('Такого ученика нет.')
+        Subject.objects.get(title=subject, year_of_study=kid.year_of_study)
+    except Subject.DoesNotExist:
+        print('Такого предмета не существует.')
     else:
         try:
-            Subject.objects.get(title=subject, year_of_study=kid.year_of_study)
-        except Subject.DoesNotExist:
-            print('Такого предмета не существует.')
-        else:
-            try:
-                lesson = Lesson.objects.filter(
-                    year_of_study=kid.year_of_study,
-                    group_letter=kid.group_letter,
-                    subject__title=subject).order_by('-date').first()
-            except Lesson.DoesNotExist:
-                print('Урока с таким предметом не существует.')
+            Lesson.objects.get(
+                year_of_study=kid.year_of_study,
+                group_letter=kid.group_letter,
+                subject__title=subject)
+        except Lesson.DoesNotExist:
+            print('Урока с таким предметом не существует.')
+        except Lesson.MultipleObjectsReturned:
+            lesson = Lesson.objects.filter(
+                year_of_study=kid.year_of_study,
+                group_letter=kid.group_letter,
+                subject__title=subject).order_by('-date').first()
+            is_commendation = Commendation.objects.filter(subject=lesson.subject, created=lesson.date)
+            if not is_commendation:
+                Commendation.objects.create(text=random.choice(commendations), created=lesson.date, schoolkid=kid,
+                                            subject=lesson.subject, teacher=lesson.teacher)
             else:
-                is_commendation = Commendation.objects.filter(subject=lesson.subject, created=lesson.date)
-                if not is_commendation:
-                    Commendation.objects.create(text=random.choice(commendations), created=lesson.date, schoolkid=kid,
-                                                subject=lesson.subject, teacher=lesson.teacher)
-                else:
-                    print('На последнем уроке по этому предмету у тебя уже есть похвала, попробуй другой предмет')
+                print('На последнем уроке по этому предмету у тебя уже есть похвала, попробуй другой предмет')
